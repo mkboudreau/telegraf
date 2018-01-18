@@ -29,6 +29,7 @@
 - [#2701](https://github.com/influxdata/telegraf/pull/2701): Use persistent connection to postgresql database.
 - [#2846](https://github.com/influxdata/telegraf/pull/2846): Add support for dropwizard input format.
 - [#3666](https://github.com/influxdata/telegraf/pull/3666): Add container health metrics to docker input.
+- [#3687](https://github.com/influxdata/telegraf/pull/3687): Add support for using globs in devices list of diskio input plugin.
 
 ### Bugfixes
 
@@ -40,6 +41,7 @@
 
 - [#3684](https://github.com/influxdata/telegraf/pull/3684): Ignore empty lines in Graphite plaintext.
 - [#3604](https://github.com/influxdata/telegraf/issues/3604): Fix index out of bounds error in solr input plugin.
+- [#3680](https://github.com/influxdata/telegraf/pull/3680): Reconnect before sending graphite metrics if disconnected.
 
 ## v1.5.1 [2017-01-10]
 
