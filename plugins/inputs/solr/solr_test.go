@@ -41,6 +41,10 @@ func TestGatherStats(t *testing.T) {
 	acc.AssertContainsTaggedFields(t, "solr_cache",
 		solrCacheExpected,
 		map[string]string{"core": "main", "handler": "filterCache"})
+
+	acc.AssertContainsTaggedFields(t, "solr_dih",
+		solrDataImportHandlerExpected,
+		map[string]string{"core": "main", "handler": "/dataimport"})
 }
 
 func TestSolr3GatherStats(t *testing.T) {
@@ -73,6 +77,10 @@ func TestSolr3GatherStats(t *testing.T) {
 	acc.AssertContainsTaggedFields(t, "solr_cache",
 		solr3CacheExpected,
 		map[string]string{"core": "main", "handler": "filterCache"})
+
+	acc.AssertContainsTaggedFields(t, "solr_dih",
+		solr3DataImportHandlerExpected,
+		map[string]string{"core": "main", "handler": "/dataimport"})
 }
 func TestNoCoreDataHandling(t *testing.T) {
 	ts := createMockNoCoreDataServer()
@@ -94,6 +102,26 @@ func TestNoCoreDataHandling(t *testing.T) {
 	acc.AssertDoesNotContainMeasurement(t, "solr_updatehandler")
 	acc.AssertDoesNotContainMeasurement(t, "solr_handler")
 
+}
+
+func TestGetIntFromDIH(t *testing.T) {
+	tests := []struct {
+		test     interface{}
+		expected int64
+	}{
+		{"java.util.concurrent.atomic.AtomicLong:0", 0},
+		{"java.util.concurrent.atomic.AtomicLong:1", 1},
+		{"java.util.concurrent.atomic.AtomicLong:12", 12},
+		{"java.util.concurrent.atomic.AtomicLong12", 0},
+		{"12", 0},
+	}
+
+	for _, tc := range tests {
+		actual := getIntFromDIH(tc.test)
+		if actual != tc.expected {
+			t.Errorf("Test [%v]: Expected %v, but got %v", tc.test, tc.expected, actual)
+		}
+	}
 }
 
 func createMockServer() *httptest.Server {

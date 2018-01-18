@@ -17,6 +17,7 @@ import (
 
 const mbeansPath = "/admin/mbeans?stats=true&wt=json&cat=CORE&cat=QUERYHANDLER&cat=UPDATEHANDLER&cat=CACHE"
 const adminCoresPath = "/solr/admin/cores?action=STATUS&wt=json"
+const dataImportHandlerClass = "org.apache.solr.handler.dataimport.DataImportHandler"
 
 type node struct {
 	Host string `json:"host"`
@@ -79,6 +80,7 @@ type Core struct {
 // QueryHandler is an exported type that
 // contains query handler metrics
 type QueryHandler struct {
+	Class string      `json:"class"`
 	Stats interface{} `json:"stats"`
 }
 
@@ -273,23 +275,31 @@ func addQueryHandlerMetricsToAcc(acc telegraf.Accumulator, core string, mBeansDa
 
 	for name, metrics := range queryMetrics {
 		var coreFields map[string]interface{}
+		var measurement = "solr_queryhandler"
 
 		if metrics.Stats == nil {
 			continue
 		}
 
+		var rawMapOfData map[string]interface{}
+
 		switch v := metrics.Stats.(type) {
 		case []interface{}:
-			m := convertArrayToMap(v)
-			coreFields = convertQueryHandlerMap(m)
+			rawMapOfData = convertArrayToMap(v)
+			coreFields = convertQueryHandlerMap(rawMapOfData)
 		case map[string]interface{}:
-			coreFields = convertQueryHandlerMap(v)
+			rawMapOfData = v
+			coreFields = convertQueryHandlerMap(rawMapOfData)
 		default:
 			continue
 		}
+		if metrics.Class == dataImportHandlerClass {
+			coreFields = addDataImportHandlerFields(coreFields, rawMapOfData)
+			measurement = "solr_dih"
+		}
 
 		acc.AddFields(
-			"solr_queryhandler",
+			measurement,
 			coreFields,
 			map[string]string{
 				"core":    core,
@@ -332,6 +342,36 @@ func convertQueryHandlerMap(value map[string]interface{}) map[string]interface{}
 		"timeouts":                   getInt(value["timeouts"]),
 		"total_time":                 getFloat(value["totalTime"]),
 	}
+}
+
+func addDataImportHandlerFields(coreFields, solrData map[string]interface{}) map[string]interface{} {
+	if coreFields == nil {
+		return make(map[string]interface{})
+	}
+
+	statusField := fmt.Sprintf("%v", solrData["Status"])
+	var idle, running int8
+	if strings.ToUpper(statusField) == "IDLE" {
+		idle = 1
+	} else {
+		running = 1
+	}
+
+	coreFields["dih_status"] = statusField
+	coreFields["dih_is_idle"] = idle
+	coreFields["dih_is_running"] = running
+	coreFields["dih_docs_skipped"] = getIntFromDIH(solrData["Documents Skipped"])
+	coreFields["dih_docs_processed"] = getIntFromDIH(solrData["Documents Processed"])
+	coreFields["dih_docs_deleted"] = getIntFromDIH(solrData["Documents Deleted"])
+	coreFields["dih_rows_fetched"] = getIntFromDIH(solrData["Rows Fetched"])
+	coreFields["dih_datasource_requests"] = getIntFromDIH(solrData["Requests made to DataSource"])
+	coreFields["dih_total_docs_skipped"] = getIntFromDIH(solrData["Total Documents Skipped"])
+	coreFields["dih_total_docs_processed"] = getIntFromDIH(solrData["Total Documents Processed"])
+	coreFields["dih_total_docs_deleted"] = getIntFromDIH(solrData["Total Documents Deleted"])
+	coreFields["dih_total_rows_fetched"] = getIntFromDIH(solrData["Total Rows Fetched"])
+	coreFields["dih_total_datasource_requests"] = getIntFromDIH(solrData["Total Requests made to DataSource"])
+
+	return coreFields
 }
 
 // Add update metrics section to accumulator
@@ -412,6 +452,15 @@ func getInt(unk interface{}) int64 {
 	default:
 		return int64(0)
 	}
+}
+
+func getIntFromDIH(unk interface{}) int64 {
+	value := fmt.Sprintf("%v", unk)
+	parts := strings.Split(value, ":")
+	if len(parts) != 2 {
+		return 0
+	}
+	return getInt(parts[1])
 }
 
 // Add cache metrics section to accumulator
